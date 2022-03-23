@@ -1,0 +1,24 @@
+{
+  "model_path": "data/modele/FlaubertForTokenClassification.pt",
+  "tokenizer_path": "data/tokenizer",
+  "labels_format": "entity_name",
+  "seed": 42,
+  "max_seq_length": 128,
+  "per_gpu_batch_size": 8,
+  "entities": [
+    "PERSON",
+    "DATE",
+    "GPE",
+    "IMMAT",
+    "TIME",
+    "ADDRESS",
+    "WEBSITE",
+    "MONEY",
+    "CAR",
+    "REF_NUM",
+    "EMAIL",
+    "ZIP",
+    "PHONE"
+],
+  "regex": []
+}

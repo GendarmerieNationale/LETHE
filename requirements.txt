@@ -1,0 +1,16 @@
+Faker
+huggingface-hub
+ipython
+jsonschema
+matplotlib
+numpy
+pandas
+scikit-learn
+scipy
+seaborn
+seqeval
+tensorboardX
+torch
+tqdm
+transformers
+Unidecode

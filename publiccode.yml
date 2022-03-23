@@ -1,0 +1,74 @@
+# This repository adheres to the publiccode.yml standard by including this 
+# metadata file that makes public software easily discoverable.
+# More info at https://github.com/italia/publiccode.yml
+
+publiccodeYmlVersion: '0.2'
+name: LÉTHÉ
+url: 'https://github.com/GendarmerieNationale/LETHE'
+releaseDate: '2022-03-23'
+softwareVersion: '1.0'
+developmentStatus: stable
+platforms:
+  - linux
+  - windows
+  - mac
+softwareType: library
+categories:
+  - application-development
+maintenance:
+  type: internal
+  contacts:
+    - name: Datalab
+      email: datalab.bap.stsisi@gendarmerie.interieur.gouv.fr
+      affiliation: Gendarmerie Nationale / ST(SI)2
+legal:
+  license: Apache-2.0
+  mainCopyrightOwner: Gendarmerie Nationale
+  repoOwner: Gendarmerie Nationale
+intendedAudience:
+  countries:
+    - fr
+localisation:
+  localisationReady: false
+  availableLanguages:
+    - fr
+fr:
+  sample: '-'
+description:
+  fr:
+    genericName: Traitement automatique du langage
+    longDescription: |
+      Ce projet a pour but de permettre la pseudonymisation automatique d'un
+      corpus de textes. Concrètement, le processus s'effectue en 2 temps:
+
+
+      - un modèle de deep learning détecte un certain nombre d'entités nommées.
+
+      - ces entités sont remplacées dans le corpus par une balise indiquant leur
+      type ou par une entité fictive.
+
+
+      Le projet inclut des fonctions permettant de :
+
+
+      - charger un corpus de textes annoté au format doccano (jsonl)
+
+      - charger un corpus de textes non annotés sous forme de liste de chaines
+      de caractères
+
+      - détecter une liste d'entités dans un corpus de textes
+
+      - remplacer les entités annotées par une balise ou d'autres entités
+      fictives du meme type
+
+      - entrainer un modèle de type Transformers sur un corpus de textes annotés
+
+      - évaluer les performances de détection d'entités nommées d'un modèle sur
+      un corpus test
+
+      - exporter un corpus de texte au format doccano
+    shortDescription: Librairie de pseudonymisation automatique d'un corpus de textes
+    features:
+      - Reconnaissance d'Entités Nommées
+      - Pseudonymisation
+      - Entraînement de modèles transformers

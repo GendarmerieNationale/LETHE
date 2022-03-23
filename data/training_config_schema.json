@@ -1,0 +1,99 @@
+{
+  "type": "object",
+  "properties": {
+    "output_dir": {
+      "description": "Chemin de sauvegarde du modèle entrainé, des logs et du fichier de configuration.",
+      "type": "string"
+    },
+    "model_path": {
+      "description": "Chemin du modèle à utiliser pour un entrainement, une évaluation ou une détection d'entités.",
+      "type": "string"
+    },
+    "tokenizer_path": {
+      "description": "Chemin du tokenizer associé au modèle.",
+      "type": "string"
+    },
+    "labels_format": {
+      "description": "Type d'annotations (BIO ou autre).",
+      "type": "string"
+    },
+    "seed": {
+      "description": "Seed utilisée pour l'entrainement.",
+      "type": "integer"
+    },
+    "max_seq_length": {
+      "description": "Nombre de tokens maximum par texte. Les textes plus longs seront coupés en plusieurs parties.",
+      "type": "integer"
+    },
+    "per_gpu_batch_size": {
+      "description": "Nombre de processeurs à utiliser.",
+      "type": "integer"
+    },
+    "adam_epsilon": {
+      "description": "Valeur initial de l'incrément pour la descente de gradient.",
+      "type": "number"
+    },
+    "gradient_accumulation_steps": {
+      "description": "Nombre d'itérations avant de mettre à jour les paramètres du modèle et la valeur de l'incrément.",
+      "type": "integer"
+    },
+    "max_grad_norm": {
+      "description": "Valeur maximale de la norme du gradient lors de sa renormalisation.",
+      "type": "number"
+    },
+    "max_steps": {
+      "description": "Nombre maximum d'iterations pour l'entrainement du modèle. Illimité si ce paramètre est négatif.",
+      "type": "integer"
+    },
+    "num_train_epochs": {
+      "description": "Nombre d'epochs pour l'entrainement du modèle.",
+      "type": "integer"
+    },
+    "weight_decay": {
+      "description": "Coefficient de weight decay de la méthode d'optimisation Adam.",
+      "type": "number"
+    },
+    "learning_rate": {
+      "description": "Valeur initiale d'incrément.",
+      "type": "number"
+    },
+    "warmup_steps": {
+      "description": "Nombre d'itérations que met le scheduler à augmenter la valeur de l'incrément de 0 à celle indiquée dans learning_rate.",
+      "type": "integer"
+    },
+    "loss_function": {
+      "description": "Type de fonction de loss: FocalLoss ou CrossEntropyLoss pour tout autre valeur.",
+      "type": "string"
+    },
+    "entities": {
+      "description": "Liste des entités à détecter.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "regex": {
+      "description": "...",
+      "type": "array"
+    }
+  },
+  "required": [
+    "output_dir",
+    "model_path",
+    "tokenizer_path",
+    "labels_format",
+    "seed",
+    "max_seq_length",
+    "per_gpu_batch_size",
+    "adam_epsilon",
+    "gradient_accumulation_steps",
+    "max_grad_norm",
+    "max_steps",
+    "num_train_epochs",
+    "weight_decay",
+    "learning_rate",
+    "warmup_steps",
+    "loss_function",
+    "entities"
+  ]
+}
