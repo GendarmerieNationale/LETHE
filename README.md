@@ -57,7 +57,7 @@ Le projet inclut des fonctions permettant de :
    <div id="clonage_repo"></div>
    
    ```sh
-   git clone https://omnibus-pic.gendarmerie.fr/DATALAB/projets/jud/automis.git
+   git clone https://github.com/GendarmerieNationale/LETHE.git
    ```
 2. Création de l'environement virtuel
    <div id="virtual_env"></div>
