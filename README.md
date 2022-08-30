@@ -235,6 +235,6 @@ Distribué sous licence Apache-2.0. Voir `LICENSE.txt` pour plus d'informations.
 
 STSI² / SDSI / BAP / DATALAB  - datalab.bap.stsisi@gendarmerie.interieur.gouv.fr
 
-Lien du projet: [Pseudonymisation](https://omnibus-pic.gendarmerie.fr/DATALAB/projets/pseudonymisation)
+Lien du projet: [Pseudonymisation](https://github.com/GendarmerieNationale/LETHE.git)
 
 <p align="right">(<a href="#top">retour en haut</a>)</p>
