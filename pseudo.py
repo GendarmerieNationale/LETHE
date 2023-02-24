@@ -799,7 +799,8 @@ class Ner:
 
 class Pseudo:
 
-    def __init__(self, _names_path, _address_path, _car_path, societies_path, labels_column, labels_format):
+    def __init__(self, _names_path, _address_path, _car_path, societies_path, labels_column, labels_format,
+                 white_space_token):
 
         self.names_path = _names_path
         self.address_path = _address_path
@@ -808,6 +809,7 @@ class Pseudo:
         self.labels_col = labels_column
         self.labels_format = labels_format
         self.fake = Faker('fr_FR')
+        self.white_space_token = white_space_token
         Faker.seed()
 
         self.address, self.names, self.zip, self.cars, self.societies, self.train_df, self.dev_df, self.test_df = \
@@ -1703,6 +1705,9 @@ class Pseudo:
                     return ind, ind + sll - 1
             return None, None
 
+        new_entity = new_entity.replace(" ", self.white_space_token)
+        if old_entity.endswith(self.white_space_token):
+            new_entity += self.white_space_token
         found_right_entity = False
         char_start = 0
         max_pos = len(x[self.labels_col]) - [x.split('-')[-1] for x in x[self.labels_col]][::-1].index(entity_type) - 1
@@ -1825,7 +1830,7 @@ def load_doccano_corpus(list_of_corpus_path, labels_format):
     return list(corpus.values())
 
 
-def replace_entities(corpus, entities, paths, labels_column, labels_format):
+def replace_entities(corpus, entities, paths, labels_column, labels_format, white_space_token):
     """
     Remplace les entités précisées dans un corpus donné.
     :param corpus: DataFrame du corpus de textes
@@ -1837,7 +1842,7 @@ def replace_entities(corpus, entities, paths, labels_column, labels_format):
     """
 
     pseudo = Pseudo(paths["noms"], paths["adresses"], paths["vehicules"], paths["societes"], labels_column,
-                    labels_format)
+                    labels_format, white_space_token)
     corpus = pseudo.chain_of_replacements_other_entity(corpus, entities)
 
     return corpus
@@ -1968,4 +1973,4 @@ def write_doccano_format(corpus, white_space_token, output_file):
 
     with open(output_file, 'w', encoding='utf-8') as f:
         for file in jsonl:
-            f.write(json.dumps(file) + '\n')
+            f.write(json.dumps(file, ensure_ascii=False) + '\n')

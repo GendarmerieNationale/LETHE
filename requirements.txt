@@ -12,5 +12,5 @@ seqeval
 tensorboardX
 torch
 tqdm
-transformers
+transformers==4.10.1
 Unidecode

@@ -50,8 +50,8 @@ white_space_token = "</w>"
 corpus_annote = detect_entities(parametres, test_corpus)
 
 # Remplacement des entités
-corpus_pseudonymise = replace_entities(corpus_annote, parametres["entities"], csv_paths, "labels",
-                                       parametres["labels_format"])
+corpus_pseudonymise = replace_entities(corpus_annote, parametres["entities"], csv_paths, "predicted_labels",
+                                       parametres["labels_format"], white_space_token)
 
 # Ecriture du fichier au format doccano
 output_corpus_path = 'data/test/corpus_annote.jsonl'
