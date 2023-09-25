@@ -1,8 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
 import logging
+import os
+import torch
 import pandas as pd
-
+from transformers import AutoConfig, AutoModelForTokenClassification, AutoTokenizer
 logger = logging.getLogger(__name__)
 
 
@@ -36,49 +38,17 @@ def build_tags(df):
     return words, labels
 
 
-def convert_to_features(corpus, labels_list, max_seq_length, tokenizer, tokenizer_special_tokens):
-    """
-    Convertit le DataFrame d'un corpus donné en objets InputFeatures après avoir effectué la tokenization du texte et
-    des labels.
-    :param corpus: DataFrame du corpus de textes
-    :param labels_list: liste des différents labels possibles
-    :param max_seq_length: taille maximale des textes en tokens
-    :param tokenizer: tokenizer du modèle
-    :param tokenizer_special_tokens: tokens spécifiques du tokenizer
-    :return: liste d'objets InputFeatures
-    """
-    label_map = {label: i for i, label in enumerate(labels_list)}
-    special_tokens_count = 3 if tokenizer_special_tokens["sep_token_extra"] else 2
-    features = []
-    token_params = [tokenizer_special_tokens["sep_token"], tokenizer_special_tokens["cls_token"],
-                    tokenizer_special_tokens["pad_token"], tokenizer_special_tokens["pad_token_label_id"],
-                    tokenizer_special_tokens["pad_token_segment_id"], tokenizer_special_tokens["sequence_a_segment_id"],
-                    tokenizer_special_tokens["cls_token_segment_id"], tokenizer_special_tokens["sep_token_extra"],
-                    tokenizer_special_tokens["cls_token_at_end"], tokenizer_special_tokens["mask_padding_with_zero"],
-                    tokenizer_special_tokens["pad_on_left"]]
-
-    for i_index, row in corpus.iterrows():
-        # Keeping only labels included in the variable labels_list
-        if "labels" in row.keys():
-            filtered_labels = [x if x in labels_list else "O" for x in row["labels"]]
-        else:
-            filtered_labels = ["O" for _ in row["text"]]
-
-        if "file" in row.keys():
-            _file = row["file"]
-        else:
-            _file = None
-
-        if i_index % 2000 == 0:
-            logger.debug("Writing example %d of %d", i_index, len(corpus))
-        # Splits texts into tokens and labels accordingly
-        text_tokens, labels, file_tokens = tokenize_and_preserve_labels(tokenizer, row["text"], filtered_labels, _file)
-        label_ids = [label_map[label] for label in labels]
-        # Stores texts and labels into InputFeatures objects
-        features = split_text_into_parts(text_tokens, label_ids, features, max_seq_length, special_tokens_count,
-                                         tokenizer,token_params, file_tokens)
-
-    return features
+def condense_labels(labels):
+    new_labels = labels[:]
+    for i in range(1, len(labels)):
+        if (labels[i]["value"]["labels"] == labels[i - 1]["value"]["labels"]) & (
+                labels[i]["value"]["start"] == labels[i - 1]["value"]["end"] + 1):
+            new_labels.pop(i)
+            new_labels[i-1]["value"]["end"] = labels[i]["value"]["end"]
+            new_labels[i - 1]["value"]["text"] += f" {labels[i]['value']['text']}"
+            new_labels = condense_labels(new_labels)
+            break
+    return new_labels
 
 
 def find_sub_list(sublist, the_list, strict=True):
@@ -137,6 +107,131 @@ def get_text_and_labels(text, annotations, labels_format):
     return text, bio_tags
 
 
+def extend_labels_to_tokens(label, n_subwords, method="full"):
+
+    if method == "first":
+        return [label] + [""] * (n_subwords-1)
+    else:
+        return [label] * (n_subwords)
+
+
+def condense_labels_to_words(tokens, tokens_labels, first_token_symbol="▁", method="any"):
+
+    if len(tokens) == 0:
+        return []
+
+    condensed_labels = []
+    word_labels = [tokens_labels[0]]
+    for token, label in list(zip(tokens, tokens_labels))[1:]:
+        if token.startswith(first_token_symbol):
+            condensed_labels.append(word_labels)
+            word_labels = [label]
+        else:
+            word_labels += [label]
+    condensed_labels.append(word_labels)
+    if method == "any":
+        condensed_labels = ["O" if all([y == "O" for y in x]) else max(set([y for y in x if y != "O"]),
+                            key=[y for y in x if y != "O"].count) for x in condensed_labels]
+    elif method == "first":
+        condensed_labels = [x[0] for x in condensed_labels]
+
+    return condensed_labels
+
+
+def load_model_and_tokenizer(model_path, tokenizer_path, labels=None):
+    """
+    Chargement du modèle et du tokenizer associé.
+    :param model_path: chemin vers le modèle à utiliser
+    :param tokenizer_path: chemin vers le tokenizer à utiliser
+    :param labels: liste des différents labels possibles
+    :return: modèle et tokenizer
+    """
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    if model_path.endswith(".pt"):
+        if device.type == "cpu":
+            model = torch.load(model_path, map_location=torch.device('cpu'))
+        else:
+            model = torch.load(model_path)
+
+        tokenizer_path = os.path.join(tokenizer_path, model.__class__.__name__)
+
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    else:
+        config_file = os.path.join(model_path, "config.json")
+
+        config = AutoConfig.from_pretrained(config_file)
+        if labels is not None:
+            config.num_labels = len(labels)
+
+        model = AutoModelForTokenClassification.from_config(config)
+
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+
+    return model, tokenizer
+
+
+def add_special_tokens_and_padding(text_tokens_ids, label_ids, file_tokens_ids, token_config, special_tokens,
+                                   max_seq_length):
+
+    # The convention in BERT is:
+    # (a) For sequence pairs:
+    #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
+    #  type_ids:   0   0  0    0    0     0       0   0   1  1  1  1   1   1
+    # (b) For single sequences:
+    #  tokens:   [CLS] the dog is hairy . [SEP]
+    #  type_ids:   0   0   0   0  0     0   0
+    #
+    # Where "type_ids" are used to indicate whether this is the first
+    # sequence or the second sequence. The embedding vectors for `type=0` and
+    # `type=1` were learned during pre-training and are added to the wordpiece
+    # embedding vector (and position vector). This is not *strictly* necessary
+    # since the [SEP] token unambiguously separates the sequences, but it makes
+    # it easier for the model to learn the concept of sequences.
+    #
+    # For classification tasks, the first vector (corresponding to [CLS]) is
+    # used as the "sentence vector". Note that this only makes sense because
+    # the entire model is fine-tuned.
+    text_tokens_ids += [special_tokens["sep_id"]]
+    label_ids += [special_tokens["pad_label_id"]]
+    if token_config["extra_sep"]:
+        # roberta uses an extra separator b/w pairs of sentences
+        text_tokens_ids += [special_tokens["sep_id"]]
+        label_ids += [special_tokens["pad_label_id"]]
+
+    if token_config["cls_token_at_end"]:
+        text_tokens_ids += [special_tokens["cls_id"]]
+        label_ids += [special_tokens["pad_label_id"]]
+    else:
+        text_tokens_ids = [special_tokens["cls_id"]] + text_tokens_ids
+        label_ids = [special_tokens["pad_label_id"]] + label_ids
+
+    # The mask has 1 for real tokens and 0 for padding tokens. Only real
+    # tokens are attended to.
+    mask_ids = [1 if token_config["mask_padding_with_zero"] else 0] * len(text_tokens_ids)
+
+    # Zero-pad up to the sequence length.
+    padding_length = max_seq_length - len(text_tokens_ids)
+    if token_config["pad_on_left"]:
+        text_tokens_ids = ([special_tokens["pad_id"]] * padding_length) + text_tokens_ids
+        mask_ids = ([0 if token_config["mask_padding_with_zero"] else 1] * padding_length) + mask_ids
+        label_ids = ([special_tokens["pad_label_id"]] * padding_length) + label_ids
+    else:
+        text_tokens_ids += ([special_tokens["pad_id"]] * padding_length)
+        mask_ids += ([0 if token_config["mask_padding_with_zero"] else 1] * padding_length)
+        label_ids += ([special_tokens["pad_label_id"]] * padding_length)
+
+    padding_length = max_seq_length - len(file_tokens_ids)
+    file_tokens_ids += ([special_tokens["pad_id"]] * padding_length)
+
+    assert len(text_tokens_ids) == max_seq_length
+    assert len(mask_ids) == max_seq_length
+    assert len(label_ids) == max_seq_length
+    assert len(file_tokens_ids) == max_seq_length
+
+    return text_tokens_ids, mask_ids, label_ids, file_tokens_ids
+
+
 def split_text(text, list_tuples):
     """
     Partage un texte en mots selon les espaces et en prenant en compte les annotations (utile si la fin d'une entité
@@ -161,52 +256,35 @@ def split_text(text, list_tuples):
     return _parts
 
 
-def split_text_into_parts(text_tokens, label_ids, features, max_seq_length, special_tokens_count, tokenizer,
-                          tokenizer_special_tokens, file_tokens):
+def split_into_parts(text_ids, labels_ids, file_ids, max_seq_length):
     """
     Coupe les textes trop longs en plusieurs parties.
-    :param text_tokens: tokens du texte
-    :param label_ids: labels correspondant
-    :param features: liste d'objets InputFeatures
+    :param text_ids: ids des tokens du texte
+    :param labels_ids: labels correspondants
+    :param file_ids: ids des tokens du nom du fichier
     :param max_seq_length: taille maximale acceptée par le modèle (en nombre de tokens)
-    :param special_tokens_count: nombre minimum de tokens spéciaux par texte
-    :param tokenizer: tokenizer du modèle
-    :param tokenizer_special_tokens: tokens spécifiques du tokenizer
-    :param file_tokens: tokens du nom du texte
     :return: liste d'objets InputFeatures modifiée
     """
     _keep_cutting = True
-    _tokens_process = text_tokens.copy()
-    _label_ids_process = label_ids.copy()
+    start_index = 0
     part_index = 1
 
+    chunks = []
     while _keep_cutting:
-        if len(_tokens_process) > max_seq_length - special_tokens_count:
-            text_tokens = _tokens_process[:(max_seq_length - special_tokens_count)]
-            label_ids = _label_ids_process[:(max_seq_length - special_tokens_count)]
-
-            text_token_ids, text_mask, segment_ids, label_ids, file_token_ids = tokenize_this(text_tokens, label_ids,
-                                                                                              tokenizer,
-                                                                                              max_seq_length,
-                                                                                              tokenizer_special_tokens,
-                                                                                              file_tokens)
-            _tokens_process = _tokens_process[(max_seq_length - special_tokens_count):]
-            _label_ids_process = _label_ids_process[(max_seq_length - special_tokens_count):]
+        if len(text_ids[start_index:]) > max_seq_length:
+            slice_text_ids = text_ids[start_index:max_seq_length]
+            slice_label_ids = labels_ids[start_index:max_seq_length]
+            start_index += max_seq_length
         else:
-            text_token_ids, text_mask, segment_ids, label_ids, file_token_ids = tokenize_this(_tokens_process,
-                                                                                              _label_ids_process,
-                                                                                              tokenizer,
-                                                                                              max_seq_length,
-                                                                                              tokenizer_special_tokens,
-                                                                                              file_tokens)
+            slice_text_ids = text_ids[start_index:]
+            slice_label_ids = labels_ids[start_index:]
             _keep_cutting = False
 
-        features.append(InputFeatures(text_token_ids=text_token_ids, text_mask=text_mask,
-                                      segment_ids=segment_ids, label_ids=label_ids,
-                                      file_token_ids=file_token_ids, text_part_index=part_index))
+        chunks.append({"tokens_ids": slice_text_ids, "labels_ids": slice_label_ids, "tokens_ids_file": file_ids,
+                       "part_index": part_index})
         part_index += 1
 
-    return features
+    return chunks
 
 
 def switch_entity(x, old_entity, new_entity, entity_type, split_first=False):
@@ -220,7 +298,7 @@ def switch_entity(x, old_entity, new_entity, entity_type, split_first=False):
     :return: texte et tags modifiés
     """
 
-    def find_sub_list(sublist, the_list, start=0):
+    def _find_sub_list(sublist, the_list, start=0):
         """
         Finds a sublist in another list and returns the starting and ending indices.
         :param sublist: sublist
@@ -241,9 +319,9 @@ def switch_entity(x, old_entity, new_entity, entity_type, split_first=False):
     i_s, i_e = [None] * 2
     while not found_right_entity:
         if split_first:
-            i_s, i_e = find_sub_list(old_entity.split(' '), x["text"], char_start)
+            i_s, i_e = _find_sub_list(old_entity.split(' '), x["text"], char_start)
         else:
-            i_s, i_e = find_sub_list([old_entity], x["text"], char_start)
+            i_s, i_e = _find_sub_list([old_entity], x["text"], char_start)
 
         found_label = None if x["labels"][i_s] == 'O' else x["labels"][i_s].split("-")[-1]
 
@@ -332,7 +410,7 @@ def tokenize_this(text_tokens, label_ids, tokenizer, max_seq_length, token_param
     # it easier for the model to learn the concept of sequences.
     #
     # For classification tasks, the first vector (corresponding to [CLS]) is
-    # used as as the "sentence vector". Note that this only makes sense because
+    # used as the "sentence vector". Note that this only makes sense because
     # the entire model is fine-tuned.
     text_tokens += [sep_token]
     label_ids += [pad_token_label_id]
@@ -380,15 +458,3 @@ def tokenize_this(text_tokens, label_ids, tokenizer, max_seq_length, token_param
     assert len(label_ids) == max_seq_length
 
     return input_ids, input_mask, segment_ids, label_ids, file_token_ids
-
-
-class InputFeatures(object):
-    """Objet contenant toutes les informations relatives à un texte encodées par le tokenizer"""
-
-    def __init__(self, text_token_ids, text_mask, segment_ids, label_ids, file_token_ids, text_part_index):
-        self.text_token_ids = text_token_ids
-        self.text_mask = text_mask
-        self.segment_ids = segment_ids
-        self.label_ids = label_ids
-        self.file_token_ids = file_token_ids
-        self.text_part_index = text_part_index

@@ -1,0 +1,3 @@
+Appropriate NER models can be downloaded on hugginface, for example:
+- https://huggingface.co/flair/ner-french/tree/main
+- https://huggingface.co/Jean-Baptiste/camembert-ner/tree/main

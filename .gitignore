@@ -1,2 +1,11 @@
 .idea/
 __pycache__/
+wheelhouse/
+venv/
+embeddings/
+models/camembert-ner/
+models/ner-french/
+notes_on_training.py
+lab.py
+tests_archive.py
+pseudo_archive.py
